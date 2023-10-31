@@ -1205,3 +1205,23 @@
         (db.setup/migrate! db-type data-source :down 47)
         (testing "Rollback to the previous version should restore the column column, and set the default color value"
           (is (= "#31698A" (:color (t2/select-one :model/Collection :id collection-id)))))))))
+
+(deftest activity-data-migration-test
+  (testing "Migration v48.00-034"
+    (impl/test-migrations ["v48.00-034"] [migrate!]
+      (create-raw-user! "noah@metabase.com")
+      (let [activity-1 (t2/insert-returning-pks! (t2/table-name :model/Activity)
+                                                 {:topic       "card-create"
+                                                  :user_id     1
+                                                  :timestamp   :%now
+                                                  :model       "Card"
+                                                  :model_id    2
+                                                  :database_id 1
+                                                  :table_id    6
+                                                  :details     "{}"})]
+         (testing "`database_id` and `table_id` are merged with `details`")
+         (migrate!)
+         (is (= {:arbitrary-key "arbitrary-value"
+                 :database_id   1
+                 :table_id      6}
+                (t2/select-one :model/AuditLog)))))))
