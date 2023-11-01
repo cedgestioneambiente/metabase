@@ -445,7 +445,10 @@
         (t2/update! Dashboard id updates))))
   ;; now publish an event and return the updated Dashboard
   (let [dashboard (t2/hydrate (t2/select-one :model/Dashboard :id id) [:collection :is_personal])]
-    (events/publish-event! :event/dashboard-update dashboard)
+    ;; skip publishing the event if it's just a change in its collection position
+    (when-not (= #{:collection_position}
+                 (set (keys dash-updates)))
+      (events/publish-event! :event/dashboard-update dashboard))
     (assoc dashboard :last-edit-info (last-edit/edit-information-for-user @api/*current-user*))))
 
 ;; TODO - We can probably remove this in the near future since it should no longer be needed now that we're going to
