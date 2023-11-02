@@ -22,7 +22,11 @@ import type {
   CardId,
   ClickBehavior,
   EntityCustomDestinationClickBehavior,
+  Collection,
 } from "metabase-types/api";
+import { useSelector } from "metabase/lib/redux";
+import { getDashboard } from "metabase/dashboard/selectors";
+import { ROOT_COLLECTION } from "metabase/entities/collections";
 import type Question from "metabase-lib/Question";
 
 import { SidebarItem } from "../SidebarItem";
@@ -157,6 +161,12 @@ function LinkedEntityPicker({
     });
   }, [clickBehavior, updateSettings]);
 
+  const dashboard = useSelector(getDashboard);
+  const dashboardCollection = dashboard.collection ?? ROOT_COLLECTION;
+  const filterPersonalCollections = isPublicCollection(dashboardCollection)
+    ? "exclude"
+    : undefined;
+
   return (
     <div>
       <div className="pb1">
@@ -177,6 +187,7 @@ function LinkedEntityPicker({
               {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
               {/* @ts-ignore */}
               <PickerComponent
+                filterPersonalCollections={filterPersonalCollections}
                 value={clickBehavior.targetId}
                 onChange={(targetId: CardId | DashboardId) => {
                   handleSelectLinkTargetEntityId(targetId);
@@ -197,6 +208,10 @@ function LinkedEntityPicker({
       )}
     </div>
   );
+}
+
+function isPublicCollection(collection: Collection) {
+  return !collection.is_personal;
 }
 
 // eslint-disable-next-line import/no-default-export -- deprecated usage
