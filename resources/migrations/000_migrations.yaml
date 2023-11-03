@@ -15886,6 +15886,16 @@ databaseChangeLog:
         - sql:
             sql: drop view if exists v_view_log;
 
+  - changeSet:
+      id: v48.00-047
+      author: noahmoss
+      comment: Added 0.48.0 - no-op migration to remove audit DB and collection on downgrade
+      changes:
+        - comment: "No operation performed for this changeset on execution."
+      rollback:
+        - sql: DELETE FROM metabase_database WHERE is_audit = TRUE;
+        - sql: DELETE FROM collection WHERE type = 'instance_analytics';
+
   # >>>>>>>>>> DO NOT ADD NEW MIGRATIONS BELOW THIS LINE! ADD THEM ABOVE <<<<<<<<<<
 
 ########################################################################################################################

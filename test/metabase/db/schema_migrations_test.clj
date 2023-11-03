@@ -1234,3 +1234,43 @@
             (is (thrown?
                  clojure.lang.ExceptionInfo
                  (t2/query (str "SELECT 1 FROM " view-name))))))))))
+
+(deftest audit-v2-downgrade-test
+  (testing "Migration v48.00-047"
+    (impl/test-migrations "v48.00-047" [migrate!]
+      (let [{:keys [db-type ^javax.sql.DataSource data-source]} mdb.connection/*application-db*
+            _db-audit-id (first (t2/insert-returning-pks! (t2/table-name :model/Database)
+                                                          {:name       "Audit DB"
+                                                           :is_audit   true
+                                                           :details    "{}"
+                                                           :engine     "postgres"}))
+            _db-normal-id (first (t2/insert-returning-pks! (t2/table-name :model/Database)
+                                                           {:name       "Normal DB"
+                                                            :is_audit   false
+                                                            :details    "{}"
+                                                            :engine     "postgres"}))
+            _coll-analytics-id (first (t2/insert-returning-pks! (t2/table-name :model/Collection)
+                                                                {:name       "Metabase Analytics"
+                                                                 :type       "instance_analytics"
+                                                                 :slug       "metabase_analytics"}))
+            _coll-normal-id (first (t2/insert-returning-pks! (t2/table-name :model/Collection)
+                                                             {:name       "Normal Collection"
+                                                              :type       nil
+                                                              :slug       "normal_collection"}))]
+        ;; Verify that data is inserted correctly
+        (is (= 2 (count (t2/query "SELECT * FROM metabase_database"))))
+        (is (= 2 (count (t2/query "SELECT * FROM collection"))))
+
+        (migrate!) ;; no-op forward migration
+
+        ;; Verify that forward migration did not change data
+        (is (= 2 (count (t2/query "SELECT * FROM metabase_database"))))
+        (is (= 2 (count (t2/query "SELECT * FROM collection"))))
+
+        (db.setup/migrate! db-type data-source :down 47)
+
+        ;; Verify that rollback deleted the correct rows
+        (is (= 1 (count (t2/query "SELECT * FROM metabase_database"))))
+        (is (= 1 (count (t2/query "SELECT * FROM collection"))))
+        (is (= 0 (count (t2/query "SELECT * FROM metabase_database WHERE is_audit = TRUE"))))
+        (is (= 0 (count (t2/query "SELECT * FROM collection WHERE type = 'instance_analytics'"))))))))
