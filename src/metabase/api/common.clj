@@ -52,6 +52,7 @@
             route-fn-name
             wrap-response-if-needed]]
    [metabase.config :as config]
+   [metabase.events :as events]
    [metabase.models.interface :as mi]
    [metabase.util :as u]
    [metabase.util.i18n :as i18n :refer [deferred-tru tru]]
@@ -418,7 +419,6 @@
        (raise e)
        (handler request respond raise)))))
 
-
 ;;; ---------------------------------------- PERMISSIONS CHECKING HELPER FNS -----------------------------------------
 
 (defn read-check
@@ -428,7 +428,11 @@
   {:style/indent 2}
   ([obj]
    (check-404 obj)
-   (check-403 (mi/can-read? obj))
+   (try
+     (check-403 (mi/can-read? obj))
+     (catch clojure.lang.ExceptionInfo e
+       (events/publish-event! :event/read-permission-failure obj)
+       (throw e)))
    obj)
 
   ([entity id]
@@ -444,7 +448,11 @@
   {:style/indent 2}
   ([obj]
    (check-404 obj)
-   (check-403 (mi/can-write? obj))
+   (try
+     (check-403 (mi/can-write? obj))
+     (catch clojure.lang.ExceptionInfo e
+       (events/publish-event! :event/write-permission-failure obj)
+       (throw e)))
    obj)
   ([entity id]
    (write-check (t2/select-one entity :id id)))
@@ -459,7 +467,11 @@
   hardcoded into them -- this should be considered an antipattern and be refactored out going forward."
   {:added "0.32.0", :style/indent 2}
   [entity m]
-  (check-403 (mi/can-create? entity m)))
+  (try
+    (check-403 (mi/can-create? entity m))
+    (catch clojure.lang.ExceptionInfo e
+      (events/publish-event! :event/create-permission-failure {:entity entity})
+      (throw e))))
 
 (defn update-check
   "NEW! Check whether the current user has permissions to UPDATE an object by applying a map of `changes`.
@@ -469,7 +481,11 @@
   into them -- this should be considered an antipattern and be refactored out going forward."
   {:added "0.36.0", :style/indent 2}
   [instance changes]
-  (check-403 (mi/can-update? instance changes)))
+  (try
+    (check-403 (mi/can-update? instance changes))
+    (catch clojure.lang.ExceptionInfo e
+      (events/publish-event! :event/update-permission-failure instance)
+      (throw e))))
 
 ;;; ------------------------------------------------ OTHER HELPER FNS ------------------------------------------------
 

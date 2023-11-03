@@ -3,10 +3,13 @@
    [clojure.test :refer :all]
    [mb.hawk.assert-exprs.approximately-equal :as hawk.approx]
    [metabase.api.common :as api]
+   [metabase.events :as events]
+   [metabase.models.interface :as mi]
    [metabase.server.middleware.exceptions :as mw.exceptions]
    [metabase.server.middleware.misc :as mw.misc]
    [metabase.server.middleware.security :as mw.security]
-   [methodical.core :as methodical]))
+   [methodical.core :as methodical])
+  (:import (clojure.lang ExceptionInfo)))
 
 ;;; TESTS FOR CHECK (ETC)
 
@@ -85,3 +88,50 @@
 
   (testing "multi values a vector as well"
     (is (= [1 2 3] (api/parse-multi-values-param ["1" "2" "3"] parse-long)))))
+
+;; set up for testing permission failure event publishing
+(def ^:dynamic *events* nil)
+
+(methodical/defmethod events/publish-event! ::permission-failure-event
+  [topic event]
+  (swap! *events* conj [topic event]))
+
+(deftest *-check-functions-publish-events
+  ;; setup - derive events so they get dispatched to our test method
+  (derive ::permission-failure-event :metabase/event)
+  (derive :event/read-permission-failure ::permission-failure-event)
+  (derive :event/write-permission-failure ::permission-failure-event)
+  (derive :event/update-permission-failure ::permission-failure-event)
+  (derive :event/create-permission-failure ::permission-failure-event)
+
+  (with-redefs [mi/can-read? (constantly false)
+                mi/can-write? (constantly false)
+                mi/can-update? (constantly false)
+                mi/can-create? (constantly false)]
+    (testing "read-check"
+      (binding [*events* (atom [])]
+        (is (thrown? ExceptionInfo (api/read-check {:some :fancy-object})))
+        (is (= [[:event/read-permission-failure {:some :fancy-object}]]
+               @*events*))))
+    (testing "write-check"
+      (binding [*events* (atom [])]
+        (is (thrown? ExceptionInfo (api/write-check {:some :fancy-object})))
+        (is (= [[:event/write-permission-failure {:some :fancy-object}]]
+               @*events*))))
+    (testing "update-check"
+      (binding [*events* (atom [])]
+        (is (thrown? ExceptionInfo (api/update-check {:some :fancy-object} {:some :changes})))
+        (is (= [[:event/update-permission-failure {:some :fancy-object}]]
+               @*events*))))
+    (testing "create-check"
+      (binding [*events* (atom [])]
+        (is (thrown? ExceptionInfo (api/create-check :model/Collection {})))
+        (is (= [[:event/create-permission-failure {:entity :model/Collection}]]
+               @*events*)))))
+
+  ;; teardown - underive events so they aren't dispatched in other tests
+  (underive ::permission-failure-event :metabase/event)
+  (underive :event/read-permission-failure ::permission-failure-event)
+  (underive :event/write-permission-failure ::permission-failure-event)
+  (underive :event/update-permission-failure ::permission-failure-event)
+  (underive :event/create-permission-failure ::permission-failure-event))
