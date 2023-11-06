@@ -12,8 +12,8 @@ import {
 import { getParameterValuesByIdFromQueryParams } from "metabase/parameters/utils/parameter-values";
 import { SIDEBAR_NAME } from "metabase/dashboard/constants";
 
-import { isActionDashCard } from "metabase/actions/utils";
 import { updateDashboard } from "metabase/dashboard/actions/save";
+import { getMetadata } from "metabase/selectors/metadata";
 import {
   isParameterValueEmpty,
   PULSE_PARAM_EMPTY,
@@ -28,11 +28,16 @@ import {
   getAutoApplyFiltersToastId,
 } from "../selectors";
 
-import { isVirtualDashCard } from "../utils";
 import { trackAutoApplyFiltersDisabled } from "../analytics";
 
-import { setDashboardAttributes, setDashCardAttributes } from "./core";
+import {
+  setDashboardAttributes,
+  setDashCardAttributes,
+  setMultipleDashCardAttributes,
+} from "./core";
 import { setSidebar, closeSidebar } from "./ui";
+import { getMatchingDashcardAttributes } from "metabase-lib/parameters/utils/auto-apply-filters";
+import { getExistingDashCards } from "metabase/dashboard/actions/utils";
 
 function updateParameter(dispatch, getState, id, parameterUpdater) {
   const dashboard = getDashboard(getState());
@@ -113,38 +118,32 @@ export const SET_PARAMETER_MAPPING = "metabase/dashboard/SET_PARAMETER_MAPPING";
 export const setParameterMapping = createThunkAction(
   SET_PARAMETER_MAPPING,
   (parameter_id, dashcard_id, card_id, target) => (dispatch, getState) => {
-    const dashcard = getState().dashboard.dashcards[dashcard_id];
-    const isVirtual = isVirtualDashCard(dashcard);
-    const isAction = isActionDashCard(dashcard);
+    const metadata = getMetadata(getState());
+    const dashcards = getState().dashboard.dashcards;
+    const dashcard = dashcards[dashcard_id];
 
-    let parameter_mappings = dashcard.parameter_mappings || [];
-
-    // allow mapping the same parameter to multiple action targets
-    if (!isAction) {
-      parameter_mappings = parameter_mappings.filter(
-        m => m.card_id !== card_id || m.parameter_id !== parameter_id,
-      );
-    }
-
-    if (target) {
-      if (isVirtual) {
-        // If this is a virtual (text) card, remove any existing mappings for the target, since text card variables
-        // can only be mapped to a single parameter.
-        parameter_mappings = parameter_mappings.filter(
-          m => !_.isEqual(m.target, target),
-        );
-      }
-      parameter_mappings = parameter_mappings.concat({
-        parameter_id,
-        card_id,
-        target,
-      });
+    if (target === null) {
+        dispatch(setDashCardAttributes({
+            id: dashcard.id,
+            attributes: {
+                parameter_mappings: null,
+            }
+        }))
     }
 
     dispatch(
-      setDashCardAttributes({
-        id: dashcard_id,
-        attributes: { parameter_mappings },
+      setMultipleDashCardAttributes({
+        dashcards: getMatchingDashcardAttributes(
+          dashcard,
+          getExistingDashCards(
+            getState().dashboard,
+            getState().dashboard.dashboardId,
+            null,
+          ),
+          target,
+          parameter_id,
+          metadata,
+        ),
       }),
     );
   },

@@ -11,11 +11,18 @@ import {
 import { createCard } from "metabase/lib/card";
 
 import { getVisualizationRaw } from "metabase/visualizations";
-import { trackCardCreated } from "../analytics";
-import { getDashCardById } from "../selectors";
+import { getMetadata } from "metabase/selectors/metadata";
+import { getParameterMappingOptions } from "metabase/parameters/utils/mapping-options";
+import { trackCardCreated } from "metabase/dashboard/analytics";
+import { getDashCardById } from "metabase/dashboard/selectors";
+import {
+  compareMappingOptionTargets,
+  getDashcardParameterAttributes,
+} from "metabase-lib/parameters/utils/targets";
 import {
   ADD_CARD_TO_DASH,
   REMOVE_CARD_FROM_DASH,
+  setDashCardAttributes,
   UNDO_REMOVE_CARD_FROM_DASH,
 } from "./core";
 import { cancelFetchCardData, fetchCardData } from "./data-fetching";
@@ -26,13 +33,13 @@ export const MARK_NEW_CARD_SEEN = "metabase/dashboard/MARK_NEW_CARD_SEEN";
 export const markNewCardSeen = createAction(MARK_NEW_CARD_SEEN);
 
 let tempId = -1;
+
 function generateTemporaryDashcardId() {
   return tempId--;
 }
 
-export const addCardToDashboard =
-  ({ dashId, cardId, tabId }) =>
-  async (dispatch, getState) => {
+export const addCardToDashboard = ({ dashId, cardId, tabId }) => {
+  return async (dispatch, getState) => {
     await dispatch(Questions.actions.fetch({ id: cardId }));
     const card = Questions.selectors
       .getObject(getState(), { entityId: cardId })
@@ -40,8 +47,10 @@ export const addCardToDashboard =
     const visualization = getVisualizationRaw([{ card }]);
     const createdCardSize = visualization.defaultSize || DEFAULT_CARD_SIZE;
 
+    const dashcardId = generateTemporaryDashcardId();
+
     const dashcard = {
-      id: generateTemporaryDashcardId(),
+      id: dashcardId,
       dashboard_id: dashId,
       dashboard_tab_id: tabId ?? null,
       card_id: card.id,
@@ -59,7 +68,71 @@ export const addCardToDashboard =
     dispatch(fetchCardData(card, dashcard, { reload: true, clearCache: true }));
 
     dispatch(loadMetadataForDashboard([dashcard]));
+
+    const dashcardList = getExistingDashCards(
+        getState().dashboard,
+        dashId,
+        null,
+    );
+
+    const dashcardMap = dashcardList.reduce((a, c) => {
+      a[c.id] = c;
+      return a;
+    }, {});
+
+    const matches = [];
+    for (const { parameter_mappings } of Object.values(dashcardMap)) {
+      for (const parameterMapping of parameter_mappings) {
+        const target = parameterMapping.target;
+
+        for (const parameterMappingOption of getParameterMappingOptions(
+          getMetadata(getState()),
+          null,
+          getState().dashboard.dashcards[dashcardId].card,
+          getState().dashboard.dashcards[dashcardId],
+        )) {
+          if (
+            compareMappingOptionTargets(
+              target,
+              parameterMappingOption.target,
+              dashcard,
+              getState().dashboard.dashcards[dashcardId],
+              getMetadata(getState()),
+            ) &&
+            !matches.find(
+              match => match.parameterId === parameterMapping.parameter_id,
+            )
+          ) {
+            matches.push({
+              dashcard: getState().dashboard.dashcards[dashcardId],
+              matchedTarget: parameterMappingOption,
+              parameterId: parameterMapping.parameter_id,
+              parameterMappingOption,
+              parameterMapping,
+            });
+          }
+        }
+      }
+    }
+
+    dispatch(
+      setDashCardAttributes({
+        id: dashcard.id,
+        attributes: {
+          parameter_mappings: matches.flatMap(
+            ({ dashcard, matchedTarget, parameterId }) =>
+              getDashcardParameterAttributes(
+                dashcard,
+                dashcard.card_id,
+                parameterId,
+                matchedTarget.target,
+              ),
+          ),
+        },
+      }),
+    );
   };
+};
 
 export const removeCardFromDashboard = createThunkAction(
   REMOVE_CARD_FROM_DASH,
