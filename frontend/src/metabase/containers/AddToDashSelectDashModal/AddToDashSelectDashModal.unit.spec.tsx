@@ -7,7 +7,7 @@ import {
   setupCollectionByIdEndpoint,
   setupDashboardCollectionItemsEndpoint,
 } from "__support__/server-mocks";
-import { renderWithProviders, screen, waitFor } from "__support__/ui";
+import { renderWithProviders, screen, waitFor, within } from "__support__/ui";
 import {
   createMockCard,
   createMockCollection,
@@ -329,7 +329,6 @@ describe("AddToDashSelectDashModal", () => {
           await setup({
             collections: COLLECTIONS,
           });
-
           expect(
             screen.getByRole("heading", {
               name: PERSONAL_COLLECTION.name,
@@ -343,9 +342,13 @@ describe("AddToDashSelectDashModal", () => {
         });
 
         describe('"Create a new dashboard" option', () => {
-          it('should render "Create a new dashboard" option when opening the root collection (public collection)', async () => {
-            await setup();
+          beforeEach(async () => {
+            await setup({
+              collections: COLLECTIONS,
+            });
+          });
 
+          it('should render "Create a new dashboard" option when opening the root collection (public collection)', async () => {
             expect(
               screen.getByRole("heading", {
                 name: "Create a new dashboard",
@@ -354,8 +357,6 @@ describe("AddToDashSelectDashModal", () => {
           });
 
           it('should render "Create a new dashboard" option when opening public subcollections', async () => {
-            await setup();
-
             userEvent.click(
               screen.getByRole("heading", {
                 name: COLLECTION.name,
@@ -382,8 +383,6 @@ describe("AddToDashSelectDashModal", () => {
           });
 
           it('should render "Create a new dashboard" option when opening personal subcollections', async () => {
-            await setup();
-
             userEvent.click(
               screen.getByRole("heading", {
                 name: PERSONAL_COLLECTION.name,
@@ -407,6 +406,95 @@ describe("AddToDashSelectDashModal", () => {
                 name: "Create a new dashboard",
               }),
             ).toBeInTheDocument();
+          });
+
+          describe('when "Create a new dashboard" option is clicked', () => {
+            beforeEach(async () => {
+              userEvent.click(
+                screen.getByRole("heading", {
+                  name: "Create a new dashboard",
+                }),
+              );
+            });
+            it("should render all collections", async () => {
+              // Create a new dashboard modal
+              expect(
+                screen.getByRole("heading", { name: "New dashboard" }),
+              ).toBeInTheDocument();
+              userEvent.click(screen.getByTestId("select-button"));
+
+              const popover = screen.getByRole("tooltip");
+              expect(popover).toBeInTheDocument();
+              expect(
+                await within(popover).findByRole("heading", {
+                  name: "Our analytics",
+                }),
+              ).toBeInTheDocument();
+              expect(
+                within(popover).getByRole("heading", {
+                  name: COLLECTION.name,
+                }),
+              ).toBeInTheDocument();
+              expect(
+                within(popover).getByRole("heading", {
+                  name: PERSONAL_COLLECTION.name,
+                }),
+              ).toBeInTheDocument();
+            });
+
+            it('should render "New collection" option', async () => {
+              // Create a new dashboard modal
+              expect(
+                screen.getByRole("heading", { name: "New dashboard" }),
+              ).toBeInTheDocument();
+              userEvent.click(screen.getByTestId("select-button"));
+
+              const popover = screen.getByRole("tooltip");
+              expect(popover).toBeInTheDocument();
+
+              expect(
+                await within(popover).findByText("New collection"),
+              ).toBeInTheDocument();
+            });
+
+            describe('when "New collection" option is clicked', () => {
+              beforeEach(async () => {
+                // Create a new dashboard modal
+                userEvent.click(screen.getByTestId("select-button"));
+
+                const popover = screen.getByRole("tooltip");
+
+                userEvent.click(
+                  await within(popover).findByText("New collection"),
+                );
+              });
+
+              it("should render all collections", async () => {
+                // Create a new collection modal
+                expect(
+                  screen.getByRole("heading", { name: "New collection" }),
+                ).toBeInTheDocument();
+                userEvent.click(screen.getByTestId("select-button"));
+
+                const popover = screen.getByRole("tooltip");
+                expect(popover).toBeInTheDocument();
+                expect(
+                  await within(popover).findByRole("heading", {
+                    name: "Our analytics",
+                  }),
+                ).toBeInTheDocument();
+                expect(
+                  within(popover).getByRole("heading", {
+                    name: COLLECTION.name,
+                  }),
+                ).toBeInTheDocument();
+                expect(
+                  within(popover).getByRole("heading", {
+                    name: PERSONAL_COLLECTION.name,
+                  }),
+                ).toBeInTheDocument();
+              });
+            });
           });
         });
 
@@ -532,11 +620,13 @@ describe("AddToDashSelectDashModal", () => {
         });
 
         describe('"Create a new dashboard" option', () => {
-          it('should not render "Create a new dashboard" option when opening the root collection (public collection)', async () => {
+          beforeEach(async () => {
             await setup({
               card: CARD_IN_PERSONAL_COLLECTION,
             });
+          });
 
+          it('should not render "Create a new dashboard" option when opening the root collection (public collection)', async () => {
             expect(
               screen.queryByRole("heading", {
                 name: "Create a new dashboard",
@@ -545,10 +635,6 @@ describe("AddToDashSelectDashModal", () => {
           });
 
           it('should render "Create a new dashboard" option when opening personal subcollections', async () => {
-            await setup({
-              card: CARD_IN_PERSONAL_COLLECTION,
-            });
-
             userEvent.click(
               screen.getByRole("heading", {
                 name: PERSONAL_COLLECTION.name,
@@ -572,6 +658,107 @@ describe("AddToDashSelectDashModal", () => {
                 name: "Create a new dashboard",
               }),
             ).toBeInTheDocument();
+          });
+
+          describe('when "Create a new dashboard" option is clicked', () => {
+            beforeEach(async () => {
+              // "Create a new dashboard" option only renders when opening personal collections
+              userEvent.click(
+                screen.getByRole("heading", {
+                  name: PERSONAL_COLLECTION.name,
+                }),
+              );
+              userEvent.click(
+                screen.getByRole("heading", {
+                  name: "Create a new dashboard",
+                }),
+              );
+            });
+
+            it("should render only personal collections", async () => {
+              // Create a new dashboard modal
+              expect(
+                screen.getByRole("heading", { name: "New dashboard" }),
+              ).toBeInTheDocument();
+              userEvent.click(screen.getByTestId("select-button"));
+
+              const popover = screen.getByRole("tooltip");
+              expect(popover).toBeInTheDocument();
+              expect(
+                await within(popover).findByRole("heading", {
+                  name: PERSONAL_COLLECTION.name,
+                }),
+              ).toBeInTheDocument();
+              expect(
+                within(popover).queryByRole("heading", {
+                  name: "Our analytics",
+                }),
+              ).not.toBeInTheDocument();
+              expect(
+                within(popover).queryByRole("heading", {
+                  name: COLLECTION.name,
+                }),
+              ).not.toBeInTheDocument();
+            });
+
+            it('should not render "New collection" option', async () => {
+              // Create a new dashboard modal
+              expect(
+                screen.getByRole("heading", { name: "New dashboard" }),
+              ).toBeInTheDocument();
+              userEvent.click(screen.getByTestId("select-button"));
+
+              const popover = screen.getByRole("tooltip");
+              expect(popover).toBeInTheDocument();
+              expect(
+                await within(popover).findByRole("heading", {
+                  name: PERSONAL_COLLECTION.name,
+                }),
+              ).toBeInTheDocument();
+              expect(
+                within(popover).queryByText("New collection"),
+              ).not.toBeInTheDocument();
+            });
+
+            describe('when "New collection" option is clicked', () => {
+              beforeEach(async () => {
+                // Create a new dashboard modal
+                userEvent.click(screen.getByTestId("select-button"));
+                const popover = screen.getByRole("tooltip");
+
+                // "New collection" option only renders when opening personal collections
+                userEvent.click(
+                  await within(popover).findByTestId("expand-btn"),
+                );
+                userEvent.click(within(popover).getByText("New collection"));
+              });
+
+              it("should render only personal collections", async () => {
+                // Create a new collection modal
+                expect(
+                  screen.getByRole("heading", { name: "New collection" }),
+                ).toBeInTheDocument();
+                userEvent.click(screen.getByTestId("select-button"));
+
+                const popover = screen.getByRole("tooltip");
+                expect(popover).toBeInTheDocument();
+                expect(
+                  await within(popover).findByRole("heading", {
+                    name: PERSONAL_COLLECTION.name,
+                  }),
+                ).toBeInTheDocument();
+                expect(
+                  within(popover).queryByRole("heading", {
+                    name: "Our analytics",
+                  }),
+                ).not.toBeInTheDocument();
+                expect(
+                  within(popover).queryByRole("heading", {
+                    name: COLLECTION.name,
+                  }),
+                ).not.toBeInTheDocument();
+              });
+            });
           });
         });
 
