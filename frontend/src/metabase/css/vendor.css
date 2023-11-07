@@ -2,3 +2,36 @@
 @import "z-index/z-index.css";
 @import "ace-builds/css/ace.css";
 @import "tippy.js/dist/tippy.css";
+
+.icon-master {
+  width: 100px !important;
+}
+
+.s0 {
+  fill: none;
+  stroke: #044473;
+  stroke-linecap: round;
+  stroke-width: 45.4;
+}
+.s1 {
+  fill: none;
+  stroke: #7cc324;
+  stroke-linecap: round;
+  stroke-width: 45.4;
+}
+.s2 {
+  fill: #7cc324;
+}
+.s3 {
+  fill: none;
+  stroke: #7cc324;
+  stroke-width: 25.9;
+}
+.s4 {
+  fill: #044473;
+}
+.s5 {
+  fill: none;
+  stroke: #044473;
+  stroke-width: 25.9;
+}
